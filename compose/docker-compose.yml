@@ -85,7 +85,9 @@ services:
       - DB=postgres12
       - DB_PORT=${POSTGRES_DEFAULT_PORT}
       - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_PWD=${POSTGRES_PASSWORD}
+      - SQL_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_SEEDS=postgresql
       - ENABLE_ES=true
       - ES_SEEDS=elasticsearch
