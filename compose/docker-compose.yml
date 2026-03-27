@@ -5,14 +5,14 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_PASSWORD: temporal
-      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_USER: ${POSTGRES_USER}
     networks:
       - temporal-network
     volumes:
       - /var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 60
@@ -43,7 +43,7 @@ services:
   temporal-admin-tools:
     image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
     container_name: temporal-admin-tools
-    restart: on-failure:6
+    restart: unless-stopped
     depends_on:
       postgresql:
         condition: service_healthy
@@ -51,11 +51,11 @@ services:
         condition: service_healthy
     environment:
       - DB=postgres12
-      - DB_PORT=5432
-      - POSTGRES_USER=temporal
-      - POSTGRES_PWD=temporal
+      - DB_PORT=${POSTGRES_DEFAULT_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
       - POSTGRES_SEEDS=postgresql
-      - SQL_PASSWORD=temporal
+      - SQL_PASSWORD=${POSTGRES_PASSWORD}
       - ES_HOST=elasticsearch
       - ES_PORT=9200
       - ES_SCHEME=http
@@ -66,25 +66,32 @@ services:
     volumes:
       - ./scripts:/scripts
     entrypoint: ["/bin/sh"]
-    command: /scripts/setup-postgres-es.sh
+    command: /scripts/bootstrap-postgres-es.sh
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/temporal-bootstrap-ready"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 5s
 
   temporal:
     image: temporalio/server:${TEMPORAL_VERSION}
     container_name: temporal
+    restart: unless-stopped
     depends_on:
       temporal-admin-tools:
-        condition: service_completed_successfully
+        condition: service_healthy
     environment:
       - DB=postgres12
-      - DB_PORT=5432
-      - POSTGRES_USER=temporal
-      - POSTGRES_PWD=temporal
+      - DB_PORT=${POSTGRES_DEFAULT_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PWD=${POSTGRES_PASSWORD}
       - POSTGRES_SEEDS=postgresql
       - ENABLE_ES=true
       - ES_SEEDS=elasticsearch
       - ES_VERSION=v7
       - BIND_ON_IP=0.0.0.0
-      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      - DYNAMIC_CONFIG_FILE_PATH=/etc/temporal/config/dynamicconfig/development-sql.yaml
     networks:
       - temporal-network
     ports:

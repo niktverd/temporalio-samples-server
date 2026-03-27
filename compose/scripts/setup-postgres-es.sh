@@ -11,22 +11,56 @@ set -eu
 : "${POSTGRES_SEEDS:?ERROR: POSTGRES_SEEDS environment variable is required}"
 : "${POSTGRES_USER:?ERROR: POSTGRES_USER environment variable is required}"
 
+best_effort() {
+  description=$1
+  shift
+
+  if "$@"; then
+    return 0
+  fi
+
+  status=$?
+  echo "WARNING: ${description} failed with exit code ${status}; continuing because this step may already be applied"
+  return 0
+}
+
+run_sql() {
+  database_name=$1
+  shift
+
+  temporal-sql-tool \
+    --plugin postgres12 \
+    --ep "${POSTGRES_SEEDS}" \
+    -u "${POSTGRES_USER}" \
+    -p "${DB_PORT:-5432}" \
+    --db "${database_name}" \
+    "$@"
+}
+
 echo 'Starting PostgreSQL and Elasticsearch schema setup...'
 echo 'Waiting for PostgreSQL port to be available...'
 nc -z -w 10 ${POSTGRES_SEEDS} ${DB_PORT:-5432}
 echo 'PostgreSQL port is available'
 
-# Create and setup temporal database
-temporal-sql-tool --plugin postgres12 --ep ${POSTGRES_SEEDS} -u ${POSTGRES_USER} -p ${DB_PORT:-5432} --db temporal create
-temporal-sql-tool --plugin postgres12 --ep ${POSTGRES_SEEDS} -u ${POSTGRES_USER} -p ${DB_PORT:-5432} --db temporal setup-schema -v 0.0
-temporal-sql-tool --plugin postgres12 --ep ${POSTGRES_SEEDS} -u ${POSTGRES_USER} -p ${DB_PORT:-5432} --db temporal update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
+# Create and setup temporal database. The create/setup steps are best-effort so
+# redeploys can continue to the schema update and Elasticsearch visibility setup.
+best_effort 'create temporal database' run_sql temporal create
+best_effort 'initialize temporal database schema' run_sql temporal setup-schema -v 0.0
+run_sql temporal update-schema -d /etc/temporal/schema/postgresql/v12/temporal/versioned
 
 # Setup Elasticsearch index
 # temporal-elasticsearch-tool is available in v1.30+ server releases
 if [ -x /usr/local/bin/temporal-elasticsearch-tool ]; then
   echo 'Using temporal-elasticsearch-tool for Elasticsearch setup'
-  temporal-elasticsearch-tool --ep "$ES_SCHEME://$ES_HOST:$ES_PORT" setup-schema
-  temporal-elasticsearch-tool --ep "$ES_SCHEME://$ES_HOST:$ES_PORT" create-index --index $ES_VISIBILITY_INDEX
+  best_effort 'setup Elasticsearch schema' temporal-elasticsearch-tool --ep "$ES_SCHEME://$ES_HOST:$ES_PORT" setup-schema
+  if temporal-elasticsearch-tool --ep "$ES_SCHEME://$ES_HOST:$ES_PORT" create-index --index "$ES_VISIBILITY_INDEX"; then
+    :
+  elif command -v curl >/dev/null 2>&1 && curl --head --silent --fail "$ES_SCHEME://$ES_HOST:$ES_PORT/$ES_VISIBILITY_INDEX" >/dev/null 2>&1; then
+    echo "Elasticsearch visibility index '$ES_VISIBILITY_INDEX' already exists"
+  else
+    echo "ERROR: failed to create Elasticsearch visibility index '$ES_VISIBILITY_INDEX'"
+    exit 1
+  fi
 else
   echo 'Using curl for Elasticsearch setup'
   echo 'WARNING: curl will be removed from admin-tools in v1.30.'
