@@ -1,7 +1,6 @@
 services:
   postgresql:
     image: postgres:${POSTGRESQL_VERSION}
-    container_name: temporal-postgresql
     ports:
       - "5432:5432"
     environment:
@@ -20,7 +19,6 @@ services:
 
   elasticsearch:
     image: elasticsearch:${ELASTICSEARCH_VERSION}
-    container_name: temporal-elasticsearch
     ports:
       - "9200:9200"
     environment:
@@ -42,7 +40,6 @@ services:
 
   temporal-admin-tools:
     image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
-    container_name: temporal-admin-tools
     restart: unless-stopped
     depends_on:
       postgresql:
@@ -76,7 +73,6 @@ services:
 
   temporal:
     image: temporalio/server:${TEMPORAL_VERSION}
-    container_name: temporal
     restart: unless-stopped
     depends_on:
       temporal-admin-tools:
@@ -109,7 +105,6 @@ services:
 
   temporal-create-namespace:
     image: temporalio/admin-tools:${TEMPORAL_ADMINTOOLS_VERSION}
-    container_name: temporal-create-namespace
     restart: on-failure:5
     depends_on:
       temporal:
@@ -125,7 +120,6 @@ services:
     command: /scripts/create-namespace.sh
 
   temporal-ui:
-    container_name: temporal-ui
     depends_on:
       temporal:
         condition: service_healthy
@@ -147,4 +141,3 @@ services:
 networks:
   temporal-network:
     driver: bridge
-    name: temporal-network
