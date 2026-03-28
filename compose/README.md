@@ -31,6 +31,18 @@ To stop and remove containers and volumes:
 docker compose down -v
 ```
 
+## PostgreSQL credentials and volume reuse
+
+The PostgreSQL container only applies `POSTGRES_USER` and `POSTGRES_PASSWORD` when the data directory is empty on first initialization.
+If you change those values later and reuse the existing Postgres volume, startup checks will fail with errors such as `Role "<user>" does not exist` or `password authentication failed`.
+
+For redeployments on Docker Compose or Dokploy, either:
+
+- keep the original Postgres credentials for that existing volume, or
+- remove the existing Postgres volume before redeploying so the cluster is initialized again with the new credentials
+
+The default `docker-compose.yml` now uses a named volume so the Postgres data lifecycle is explicit and easier to manage across redeployments.
+
 You can also interact with the Server using the [Temporal CLI](https://docs.temporal.io/cli).
 
 To install the Temporal CLI:
