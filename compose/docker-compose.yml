@@ -92,8 +92,11 @@ services:
       - DYNAMIC_CONFIG_FILE_PATH=/etc/temporal/config/dynamicconfig/development-sql.yaml
     networks:
       - temporal-network
+      - dokploy-network
     expose:
       - "7233"
+    labels:
+      - traefik.docker.network=${DOKPLOY_NETWORK:-dokploy-network}
     volumes:
       - ./dynamicconfig:/etc/temporal/config/dynamicconfig
     healthcheck:
@@ -135,12 +138,18 @@ services:
     image: temporalio/ui:${TEMPORAL_UI_VERSION}
     networks:
       - temporal-network
+      - dokploy-network
     expose:
       - "8080"
+    labels:
+      - traefik.docker.network=${DOKPLOY_NETWORK:-dokploy-network}
 
 networks:
   temporal-network:
     driver: bridge
+  dokploy-network:
+    external: true
+    name: ${DOKPLOY_NETWORK:-dokploy-network}
 
 volumes:
   postgresql-data:
