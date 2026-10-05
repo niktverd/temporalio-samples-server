@@ -99,7 +99,15 @@ services:
     expose:
       - "7233"
     labels:
+      # Expose Temporal's plain gRPC frontend via Traefik using TLS externally and h2c internally.
+      - traefik.enable=true
       - traefik.docker.network=${DOKPLOY_NETWORK:-dokploy-network}
+      - traefik.http.routers.temporal-grpc.rule=Host(`${TEMPORAL_PUBLIC_HOST:-preprod.temporal.unico.rn.it}`)
+      - traefik.http.routers.temporal-grpc.entrypoints=websecure
+      - traefik.http.routers.temporal-grpc.tls=true
+      - traefik.http.routers.temporal-grpc.service=temporal-grpc
+      - traefik.http.services.temporal-grpc.loadbalancer.server.port=7233
+      - traefik.http.services.temporal-grpc.loadbalancer.server.scheme=h2c
     volumes:
       - ./dynamicconfig:/etc/temporal/config/dynamicconfig
     healthcheck:
